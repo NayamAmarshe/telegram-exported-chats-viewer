@@ -7,7 +7,7 @@
   --color-tg-bg-secondary: #1c1c1e;
   --color-tg-bg-pattern: #17151c;
   --color-tg-bubble-outgoing: #8b5cf6;
-  --color-tg-bubble-incoming: #2d2d30;
+  --color-tg-bubble-incoming: #212121;
   --color-tg-text-primary: #ffffff;
   --color-tg-text-secondary: #8e8e93;
   --color-tg-text-timestamp: rgba(255, 255, 255, 0.5);
@@ -66,4 +66,22 @@ body {
 }
 .userpic8 {
   background: linear-gradient(135deg, #78909c 0%, #546e7a 100%);
+}
+
+/* Gradient=Default Dark */
+.gradient-default-dark {
+  background:
+    radial-gradient(
+        95.25% 71.06% at 0% 100%,
+        #21414e 0%,
+        rgba(33, 65, 78, 0) 100%
+      )
+      /* warning: gradient uses a rotation that is not supported by CSS and may not behave as expected */,
+    radial-gradient(
+        113.99% 70.26% at 100% 0%,
+        #39305a 0%,
+        rgba(57, 48, 90, 0) 100%
+      )
+      /* warning: gradient uses a rotation that is not supported by CSS and may not behave as expected */,
+    #111233;
 }

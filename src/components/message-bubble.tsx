@@ -1,4 +1,5 @@
 import type { ParsedMessage } from "../lib/file-handler";
+import { cn } from "../lib/utils";
 import MediaViewer from "./media-viewer";
 import { CheckCheck } from "lucide-react";
 
@@ -45,7 +46,7 @@ export default function MessageBubble({
       {/* Message bubble */}
       <div
         className={`
-        max-w-[70%] px-3 py-2 rounded-2xl relative
+        px-3 py-2 rounded-2xl relative
         ${isSticker ? "bg-transparent max-w-[180px]" : ""}
         ${
           isOutgoing
@@ -55,15 +56,19 @@ export default function MessageBubble({
       `}>
         {/* Reply Quote */}
         {message.replyTo && (
-          <div className="bg-black/20 px-2.5 py-1.5 rounded-lg border-l-2 border-tg-accent mb-1.5">
+          <div
+            className={cn(
+              "bg-black/10 px-2 py-1 rounded-sm border-l-3 border-tg-accent mb-1",
+              isOutgoing ? "border-tg-text-primary" : "border-tg-accent"
+            )}>
             {/* Show sender name if available */}
             {message.replyTo.senderName && (
-              <div className="text-tg-accent text-[13px] font-medium">
+              <div className="text-tg-text-primary/90 text-[13px] font-medium">
                 {message.replyTo.senderName}
               </div>
             )}
             {/* Show message preview if available, otherwise fallback */}
-            <div className="text-[13px] text-tg-text-secondary truncate max-w-[250px]">
+            <div className="text-[13px] text-tg-text-primary/90 truncate max-w-[250px]">
               {message.replyTo.preview || message.replyTo.text}
             </div>
           </div>
@@ -75,7 +80,7 @@ export default function MessageBubble({
         {/* Text */}
         {hasText && (
           <div
-            className="wrap-break-word whitespace-pre-wrap [&_a]:text-tg-link [&_a]:no-underline hover:[&_a]:underline"
+            className="wrap-break-word whitespace-pre-wrap [&_a]:text-white [&_a]:underline hover:[&_a]:no-underline"
             dangerouslySetInnerHTML={{
               __html: message.formattedHTML || message.text || "",
             }}
@@ -85,10 +90,12 @@ export default function MessageBubble({
         {/* Footer: time + status */}
         <div className="flex items-center justify-end gap-1 mt-0.5">
           <span
-            className={`text-[11px] ${isOutgoing ? "text-white/50" : "text-tg-text-secondary"}`}>
+            className={`text-xs ${isOutgoing ? "text-white/50" : "text-tg-text-secondary"}`}>
             {message.time}
           </span>
-          {isOutgoing && <CheckCheck size={16} className="text-green-400" />}
+          {isOutgoing && (
+            <CheckCheck size={16} className="text-tg-text-primary" />
+          )}
         </div>
       </div>
     </div>

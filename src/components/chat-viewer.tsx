@@ -1,17 +1,12 @@
 import { useRef, useCallback, useEffect, useState } from "react";
-import { atom, useAtom } from "jotai";
-import type { ParsedMessage, ChatInfo } from "../lib/file-handler";
+import { useAtom } from "jotai";
+import type { ParsedMessage } from "../lib/file-handler";
 import { parseHTML } from "../lib/file-handler";
 import { parseMessage } from "../lib/parser";
+import { chatDataAtom, loadingAtom, loadingProgressAtom } from "../lib/atoms";
 import ChatHeader from "./chat-header";
 import MessageBubble from "./message-bubble";
-import DateSeparator from "./date-separator";
 import MessageInput from "./message-input";
-
-// Jotai atoms for global state
-export const chatDataAtom = atom<ChatInfo | null>(null);
-export const loadingAtom = atom<boolean>(false);
-export const loadingProgressAtom = atom<string>("");
 
 // Pagination settings
 const MESSAGES_PER_PAGE = 50;
@@ -51,17 +46,13 @@ export default function ChatViewer() {
   const [loadingProgress, setLoadingProgress] = useAtom(loadingProgressAtom);
   const [displayedCount, setDisplayedCount] = useState(MESSAGES_PER_PAGE);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [currentStickyDate, setCurrentStickyDate] = useState<string | null>(
-    null
-  );
+  const [currentDate, setCurrentDate] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
-  const messageRefs = useRef<
-    Map<number, { element: HTMLDivElement; date: string }>
-  >(new Map());
+  const dateMarkersRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Infinite scroll - load more when reaching bottom
+  // Track which date is visible using scroll position
   const handleScroll = useCallback(() => {
     if (!messagesAreaRef.current || !chatData || loadingMore) return;
 
@@ -81,22 +72,22 @@ export default function ChatViewer() {
       }, 300);
     }
 
-    // Update sticky date based on scroll position
-    let visibleDate: string | null = null;
-    for (const [_, { element, date }] of messageRefs.current) {
+    // Find which date marker is at or above the top of the scroll area
+    const containerTop = messagesAreaRef.current.getBoundingClientRect().top;
+    let currentVisibleDate: string | null = null;
+
+    for (const [date, element] of dateMarkersRef.current) {
       const rect = element.getBoundingClientRect();
-      const containerRect = messagesAreaRef.current.getBoundingClientRect();
-      if (
-        rect.top <= containerRect.top + 50 &&
-        rect.bottom > containerRect.top
-      ) {
-        visibleDate = date;
+      // If the marker is at or above the container top, this is our current date
+      if (rect.top <= containerTop + 20) {
+        currentVisibleDate = date;
       }
     }
-    if (visibleDate !== currentStickyDate) {
-      setCurrentStickyDate(visibleDate);
+
+    if (currentVisibleDate !== currentDate) {
+      setCurrentDate(currentVisibleDate);
     }
-  }, [chatData, displayedCount, loadingMore, currentStickyDate]);
+  }, [chatData, displayedCount, loadingMore, currentDate]);
 
   useEffect(() => {
     const area = messagesAreaRef.current;
@@ -199,8 +190,10 @@ export default function ChatViewer() {
           messages: processedMessages,
         });
 
-        // Reset pagination
+        // Reset pagination and date refs
         setDisplayedCount(MESSAGES_PER_PAGE);
+        dateMarkersRef.current.clear();
+        setCurrentDate(null);
         setLoading(false);
       } catch (error) {
         console.error("Error parsing chat:", error);
@@ -213,25 +206,10 @@ export default function ChatViewer() {
     [setChatData, setLoading, setLoadingProgress]
   );
 
-  // Format date for display
-  const formatDate = (dateStr: string): string => {
-    try {
-      const [year, month, day] = dateStr.split("-").map(Number);
-      const date = new Date(year, month - 1, day);
-      return date.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
   // Loading state
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4 bg-tg-bg-pattern">
+      <div className="flex flex-col items-center justify-center h-screen gap-4 max-w-4xl mx-auto">
         <div className="w-12 h-12 border-3 border-tg-border border-t-tg-accent rounded-full animate-spin"></div>
         <div className="text-tg-text-secondary text-[15px]">
           {loadingProgress}
@@ -243,7 +221,7 @@ export default function ChatViewer() {
   // Upload state
   if (!chatData) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen p-8 text-center bg-tg-bg-pattern">
+      <div className="flex flex-col items-center justify-center mx-auto max-w-4xl h-screen p-8 text-center">
         <div className="text-6xl mb-6">💬</div>
         <h1 className="text-2xl font-semibold mb-3 text-tg-text-primary">
           Telegram Chat Viewer
@@ -253,7 +231,7 @@ export default function ChatViewer() {
           folder should contain messages.html files and any exported media.
         </p>
         <button
-          className="bg-tg-accent text-white border-none px-8 py-3.5 rounded-xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-violet-500 hover:-translate-y-0.5"
+          className="bg-tg-accent text-white border-none px-8 py-3.5 rounded-xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-violet-500 hover:translate-y-0.5"
           onClick={() => fileInputRef.current?.click()}>
           Select Export Folder
         </button>
@@ -271,46 +249,51 @@ export default function ChatViewer() {
     );
   }
 
-  // Message direction logic:
-  // The chat name (page_header) is the contact's name
-  // Messages where from matches chat name = incoming (from contact)
-  // Messages where from does NOT match chat name = outgoing (from me)
+  // Message direction logic
   const chatContactName = chatData.name;
 
   // Get messages to display (start from beginning, load more on scroll down)
   const displayedMessages = chatData.messages.slice(0, displayedCount);
 
-  // Track last date for date separators
-  let lastDate: string | null = null;
-
   return (
-    <div className="flex flex-col h-screen mx-auto bg-tg-bg-pattern shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+    <div className="flex flex-col h-screen relative">
       <ChatHeader name={chatData.name} status="last seen recently" />
 
-      {/* Sticky date at top */}
-      {currentStickyDate && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20">
-          <span className="bg-tg-accent/85 backdrop-blur-sm px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white shadow-lg">
-            {formatDate(currentStickyDate)}
-          </span>
-        </div>
-      )}
-
       <div
-        className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 relative"
+        className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 relative max-w-4xl mx-auto"
         ref={messagesAreaRef}>
+        {/* Single sticky date badge - positioned inside scroll container */}
+        {currentDate && (
+          <div className="sticky top-0 z-20 flex justify-center py-2 pointer-events-none">
+            <span className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg">
+              {currentDate}
+            </span>
+          </div>
+        )}
         {displayedMessages.map((message, index) => {
           // Direction logic
           const isFromContact = message.from === chatContactName;
           const isOutgoing = !isFromContact && message.from !== "";
 
-          // Service messages are dates
+          // Service messages are date markers (invisible, used for tracking)
           if (message.type === "service") {
+            const dateText = message.text || "";
             return (
-              <DateSeparator
+              <div
                 key={message.id || `service-${index}`}
-                date={message.text || ""}
-              />
+                ref={(el) => {
+                  if (el && dateText) {
+                    dateMarkersRef.current.set(dateText, el);
+                  }
+                }}
+                className="flex justify-center py-2">
+                {/* Only show inline date when it's NOT the current sticky date */}
+                {dateText !== currentDate && (
+                  <span className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg">
+                    {dateText}
+                  </span>
+                )}
+              </div>
             );
           }
 
@@ -322,27 +305,8 @@ export default function ChatViewer() {
               prevMessage.from !== message.from ||
               prevMessage.type === "service");
 
-          // Check for date change to show separator
-          let showDateSeparator = false;
-          if (message.date && message.date !== lastDate) {
-            showDateSeparator = true;
-            lastDate = message.date;
-          }
-
           return (
-            <div
-              key={message.id || index}
-              ref={(el) => {
-                if (el && message.date) {
-                  messageRefs.current.set(index, {
-                    element: el,
-                    date: message.date,
-                  });
-                }
-              }}>
-              {showDateSeparator && message.date && (
-                <DateSeparator date={formatDate(message.date)} />
-              )}
+            <div key={message.id || index}>
               <MessageBubble
                 message={message}
                 isOutgoing={isOutgoing}
