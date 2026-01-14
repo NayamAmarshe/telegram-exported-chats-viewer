@@ -1,6 +1,6 @@
 import { ArrowLeftIcon, EllipsisVerticalIcon, Search } from "lucide-react";
 import { useSetAtom } from "jotai";
-import { searchOpenAtom } from "../lib/atoms";
+import { searchOpenAtom, chatDataAtom } from "../lib/atoms";
 
 interface ChatHeaderProps {
   name: string;
@@ -16,11 +16,21 @@ export default function ChatHeader({
   initials,
 }: ChatHeaderProps) {
   const setSearchOpen = useSetAtom(searchOpenAtom);
+  const setChatData = useSetAtom(chatDataAtom);
+
+  const handleBack = () => {
+    setChatData(null);
+  };
 
   return (
     <header className="flex items-center gap-4 px-4 py-2.5 bg-tg-header-bg border-b border-tg-border shrink-0">
       {/* Back button */}
-      <ArrowLeftIcon className="text-tg-text-secondary size-6" />
+      <button
+        onClick={handleBack}
+        className="p-0 bg-transparent border-none cursor-pointer text-tg-text-secondary hover:text-white transition-colors"
+        title="Back to main screen">
+        <ArrowLeftIcon className="size-6" />
+      </button>
 
       {/* Avatar */}
       <div className="w-10 h-10 rounded-full bg-linear-to-br from-indigo-400 to-purple-600 flex items-center justify-center font-semibold text-base text-white overflow-hidden">

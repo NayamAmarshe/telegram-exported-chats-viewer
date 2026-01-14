@@ -10,11 +10,14 @@ import {
   loadingProgressAtom,
   scrollToMessageIdAtom,
   searchOpenAtom,
+  recentFoldersAtom,
+  type RecentFolder,
 } from "../lib/atoms";
 import ChatHeader from "./chat-header";
 import MessageBubble from "./message-bubble";
 import MessageInput from "./message-input";
 import SearchPanel from "./search-panel";
+import RecentFolders from "./recent-folders";
 
 // Pagination settings
 const MESSAGES_PER_PAGE = 50;
@@ -56,6 +59,7 @@ export default function ChatViewer() {
     scrollToMessageIdAtom
   );
   const [searchOpen] = useAtom(searchOpenAtom);
+  const [recentFolders, setRecentFolders] = useAtom(recentFoldersAtom);
   const [displayedCount, setDisplayedCount] = useState(MESSAGES_PER_PAGE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentDate, setCurrentDate] = useState<string | null>(null);
@@ -68,6 +72,19 @@ export default function ChatViewer() {
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const dateMarkersRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const messageRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Load recent folders from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("recentFolders");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as RecentFolder[];
+        setRecentFolders(parsed);
+      } catch (e) {
+        console.error("Failed to parse recent folders:", e);
+      }
+    }
+  }, [setRecentFolders]);
 
   // Track which date is visible using scroll position
   const handleScroll = useCallback(() => {
@@ -250,6 +267,24 @@ export default function ChatViewer() {
           messages: processedMessages,
         });
 
+        // Extract folder name from path
+        const firstFile = htmlFiles[0];
+        const pathParts = firstFile.webkitRelativePath.split("/");
+        const folderName = pathParts[pathParts.length - 2] || "Unknown Folder";
+
+        // Save to recent folders
+        const newFolder: RecentFolder = {
+          folderName,
+          chatName,
+          timestamp: Date.now(),
+          messageCount: processedMessages.length,
+        };
+
+        const updatedRecent = [newFolder, ...recentFolders].slice(0, 10); // Keep only last 10
+
+        setRecentFolders(updatedRecent);
+        localStorage.setItem("recentFolders", JSON.stringify(updatedRecent));
+
         // Reset pagination and date refs
         setDisplayedCount(MESSAGES_PER_PAGE);
         dateMarkersRef.current.clear();
@@ -305,6 +340,7 @@ export default function ChatViewer() {
           multiple
           onChange={handleFolderSelect}
         />
+        <RecentFolders onFolderClick={() => fileInputRef.current?.click()} />
       </div>
     );
   }
