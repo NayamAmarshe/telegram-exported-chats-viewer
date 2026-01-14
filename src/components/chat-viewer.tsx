@@ -1,12 +1,20 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import { useAtom } from "jotai";
+import { Loader2 } from "lucide-react";
 import type { ParsedMessage } from "../lib/file-handler";
 import { parseHTML } from "../lib/file-handler";
 import { parseMessage } from "../lib/parser";
-import { chatDataAtom, loadingAtom, loadingProgressAtom } from "../lib/atoms";
+import {
+  chatDataAtom,
+  loadingAtom,
+  loadingProgressAtom,
+  scrollToMessageIdAtom,
+  searchOpenAtom,
+} from "../lib/atoms";
 import ChatHeader from "./chat-header";
 import MessageBubble from "./message-bubble";
 import MessageInput from "./message-input";
+import SearchPanel from "./search-panel";
 
 // Pagination settings
 const MESSAGES_PER_PAGE = 50;
@@ -44,13 +52,22 @@ export default function ChatViewer() {
   const [chatData, setChatData] = useAtom(chatDataAtom);
   const [loading, setLoading] = useAtom(loadingAtom);
   const [loadingProgress, setLoadingProgress] = useAtom(loadingProgressAtom);
+  const [scrollToMessageId, setScrollToMessageId] = useAtom(
+    scrollToMessageIdAtom
+  );
+  const [searchOpen] = useAtom(searchOpenAtom);
   const [displayedCount, setDisplayedCount] = useState(MESSAGES_PER_PAGE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentDate, setCurrentDate] = useState<string | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<
+    string | null
+  >(null);
+  const [navigatingToMessage, setNavigatingToMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const dateMarkersRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const messageRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Track which date is visible using scroll position
   const handleScroll = useCallback(() => {
@@ -96,6 +113,49 @@ export default function ChatViewer() {
       return () => area.removeEventListener("scroll", handleScroll);
     }
   }, [handleScroll]);
+
+  // Handle scroll to message from search
+  // Handle scroll to message from search with chunked loading
+  useEffect(() => {
+    if (!scrollToMessageId || !chatData) return;
+
+    // Find the message index
+    const messageIndex = chatData.messages.findIndex(
+      (m) => m.id === scrollToMessageId
+    );
+    if (messageIndex === -1) return;
+
+    // If message is far ahead, load in chunks to prevent freeze
+    if (messageIndex >= displayedCount) {
+      setNavigatingToMessage(true);
+
+      // Load larger chunk if we're far behind
+      const chunkSize = 500;
+      const nextCount = Math.min(
+        displayedCount + chunkSize,
+        chatData.messages.length
+      );
+
+      // Update count and let render happen
+      setDisplayedCount(nextCount);
+      return;
+    }
+
+    // Message is now loaded (or was already loaded)
+    setNavigatingToMessage(false);
+
+    // Wait for render then scroll
+    setTimeout(() => {
+      const element = messageRefsMap.current.get(scrollToMessageId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Highlight the message temporarily
+        setHighlightedMessageId(scrollToMessageId);
+        setTimeout(() => setHighlightedMessageId(null), 2000);
+      }
+      setScrollToMessageId(null);
+    }, 100);
+  }, [scrollToMessageId, chatData, displayedCount, setScrollToMessageId]);
 
   const handleFolderSelect = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,7 +269,7 @@ export default function ChatViewer() {
   // Loading state
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4 max-w-4xl mx-auto">
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
         <div className="w-12 h-12 border-3 border-tg-border border-t-tg-accent rounded-full animate-spin"></div>
         <div className="text-tg-text-secondary text-[15px]">
           {loadingProgress}
@@ -221,7 +281,7 @@ export default function ChatViewer() {
   // Upload state
   if (!chatData) {
     return (
-      <div className="flex flex-col items-center justify-center mx-auto max-w-4xl h-screen p-8 text-center">
+      <div className="flex flex-col items-center justify-center mx-auto h-screen p-8 text-center">
         <div className="text-6xl mb-6">💬</div>
         <h1 className="text-2xl font-semibold mb-3 text-tg-text-primary">
           Telegram Chat Viewer
@@ -258,16 +318,32 @@ export default function ChatViewer() {
   return (
     <div className="flex flex-col h-screen relative">
       <ChatHeader name={chatData.name} status="last seen recently" />
+      {searchOpen && <SearchPanel />}
 
       <div
-        className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 relative max-w-4xl mx-auto"
+        className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 relative"
         ref={messagesAreaRef}>
         {/* Single sticky date badge - positioned inside scroll container */}
         {currentDate && (
           <div className="sticky top-0 z-20 flex justify-center py-2 pointer-events-none">
-            <span className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg">
+            <span className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg backdrop-blur-sm">
               {currentDate}
             </span>
+          </div>
+        )}
+
+        {/* Loading overlay when navigating to far message */}
+        {navigatingToMessage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[1px] pointer-events-none">
+            <div className="bg-black/80 px-4 py-3 rounded-xl flex items-center gap-3 text-white shadow-2xl">
+              <Loader2 className="animate-spin text-tg-accent" size={24} />
+              <div className="flex flex-col">
+                <span className="font-medium">Locating message...</span>
+                <span className="text-xs text-tg-text-secondary">
+                  Loading history
+                </span>
+              </div>
+            </div>
           </div>
         )}
         {displayedMessages.map((message, index) => {
@@ -306,7 +382,18 @@ export default function ChatViewer() {
               prevMessage.type === "service");
 
           return (
-            <div key={message.id || index}>
+            <div
+              key={message.id || index}
+              ref={(el) => {
+                if (el && message.id) {
+                  messageRefsMap.current.set(message.id, el);
+                }
+              }}
+              className={
+                highlightedMessageId === message.id
+                  ? "animate-pulse bg-tg-accent/20 rounded-lg"
+                  : ""
+              }>
               <MessageBubble
                 message={message}
                 isOutgoing={isOutgoing}

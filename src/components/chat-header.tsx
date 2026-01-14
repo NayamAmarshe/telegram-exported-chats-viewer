@@ -1,4 +1,6 @@
-import { ArrowLeftIcon, EllipsisVerticalIcon } from "lucide-react";
+import { ArrowLeftIcon, EllipsisVerticalIcon, Search } from "lucide-react";
+import { useSetAtom } from "jotai";
+import { searchOpenAtom } from "../lib/atoms";
 
 interface ChatHeaderProps {
   name: string;
@@ -13,6 +15,8 @@ export default function ChatHeader({
   avatar,
   initials,
 }: ChatHeaderProps) {
+  const setSearchOpen = useSetAtom(searchOpenAtom);
+
   return (
     <header className="flex items-center gap-4 px-4 py-2.5 bg-tg-header-bg border-b border-tg-border shrink-0">
       {/* Back button */}
@@ -36,6 +40,14 @@ export default function ChatHeader({
           <div className="text-[13px] text-tg-text-secondary">{status}</div>
         )}
       </div>
+
+      {/* Search button */}
+      <button
+        onClick={() => setSearchOpen(true)}
+        className="p-2 text-tg-text-secondary hover:text-white transition-colors"
+        title="Search messages">
+        <Search size={20} />
+      </button>
 
       {/* Menu */}
       <EllipsisVerticalIcon

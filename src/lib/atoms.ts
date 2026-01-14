@@ -5,3 +5,8 @@ import type { ChatInfo } from "./file-handler";
 export const chatDataAtom = atom<ChatInfo | null>(null);
 export const loadingAtom = atom<boolean>(false);
 export const loadingProgressAtom = atom<string>("");
+
+// Search state
+export const searchQueryAtom = atom<string>("");
+export const searchOpenAtom = atom<boolean>(false);
+export const scrollToMessageIdAtom = atom<string | null>(null);
