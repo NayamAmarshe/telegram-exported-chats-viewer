@@ -75,7 +75,7 @@ export default function MessageBubble({
         )}
 
         {/* Media */}
-        {hasMedia && <MediaViewer media={message.media!} />}
+        {hasMedia && <MediaViewer media={message.media} />}
 
         {/* Text */}
         {hasText && (

@@ -1,8 +1,9 @@
+import { ImageIcon, SmileIcon, VideoIcon } from "lucide-react";
 import type { MediaItem } from "../lib/file-handler";
 import { useState } from "react";
 
 interface MediaViewerProps {
-  media: MediaItem[];
+  media?: MediaItem[];
 }
 
 export default function MediaViewer({ media }: MediaViewerProps) {
@@ -35,26 +36,19 @@ function MediaItemRenderer({
   playingVideo,
   setPlayingVideo,
 }: MediaItemRendererProps) {
-  // Handle unavailable media first
-  if (item.description && !item.url && !item.thumb) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-4 px-6 bg-black/20 rounded-xl text-center">
-        <span className="text-3xl opacity-70">{item.emoji || "📎"}</span>
-        <span className="text-[13px] text-tg-text-secondary italic">
-          {item.description}
-        </span>
-      </div>
-    );
-  }
-
   switch (item.type) {
     case "photo":
       if (!item.url && !item.thumb) {
         return (
-          <div className="flex flex-col items-center gap-2 py-4 px-6 bg-black/20 rounded-xl text-center">
-            <span className="text-3xl opacity-70">🖼️</span>
-            <span className="text-[13px] text-tg-text-secondary italic">
-              Photo not available
+          <div className="flex flex-col items-center gap-2 py-4 px-6 bg-black/20 rounded-xl text-center max-w-64">
+            <span className="text-3xl opacity-70">
+              <ImageIcon />
+            </span>
+            <span className="text-[13px] text-tg-text-secondary text-balance">
+              {item.description}
+            </span>
+            <span className="text-[13px] text-tg-text-secondary">
+              {item.status}
             </span>
           </div>
         );
@@ -74,9 +68,14 @@ function MediaItemRenderer({
       if (!item.url) {
         return (
           <div className="flex flex-col items-center gap-2 py-4 px-6 bg-black/20 rounded-xl text-center">
-            <span className="text-3xl opacity-70">🎬</span>
+            <span className="text-3xl opacity-70">
+              <VideoIcon />
+            </span>
             <span className="text-[13px] text-tg-text-secondary italic">
-              Video not available
+              {item.description}
+            </span>
+            <span className="text-[13px] text-tg-text-secondary">
+              {item.status}
             </span>
           </div>
         );
@@ -142,10 +141,15 @@ function MediaItemRenderer({
     case "animated_sticker":
       if (item.description) {
         return (
-          <div className="flex flex-col items-center gap-2 py-4 px-6 bg-black/20 rounded-xl text-center">
-            <span className="text-3xl opacity-70">{item.emoji || "🎨"}</span>
+          <div className="flex flex-col items-center gap-2 py-4 bg-black/20 rounded-xl text-center max-w-64">
+            <span className="opacity-70 text-3xl">
+              {item.emoji || <SmileIcon />}
+            </span>
             <span className="text-[13px] text-tg-text-secondary italic">
-              {item.description}
+              Sticker {item.description}
+            </span>
+            <span className="text-[13px] text-tg-text-secondary">
+              {item.status}
             </span>
           </div>
         );

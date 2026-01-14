@@ -83,6 +83,11 @@ export const parseMessage = async (
   for (const photo of photos) {
     const href = photo.getAttribute("href");
     const img = photo.querySelector("img");
+    const title = photo.querySelector(".title")?.textContent?.trim();
+    const description = photo
+      .querySelector(".description")
+      ?.textContent?.trim();
+    const status = photo.querySelector(".status")?.textContent?.trim();
     if (href) {
       const url = await findFileInFolder(
         allFiles,
@@ -92,8 +97,69 @@ export const parseMessage = async (
         ? await findFileInFolder(allFiles, getRelativePath(img.src, basePath))
         : null;
       if (url || thumbUrl) {
-        media.push({ type: "photo", url: url || thumbUrl, thumb: thumbUrl });
+        media.push({
+          type: "photo",
+          url: url || thumbUrl,
+          thumb: thumbUrl,
+          title,
+          description: description,
+        });
+      } else {
+        // Photo not available - add placeholder
+        media.push({
+          type: "photo",
+          url: "",
+          title,
+          description: description,
+        });
       }
+    }
+  }
+
+  // Photos
+  const legacyPhotos = messageDiv.querySelectorAll(".media_photo");
+  for (const photo of legacyPhotos) {
+    const title = photo.querySelector(".title")?.textContent?.trim();
+    const status = photo.querySelector(".status")?.textContent?.trim();
+    const href = photo.getAttribute("href");
+    const img = photo.querySelector("img");
+    const description = photo
+      .querySelector(".description")
+      ?.textContent?.trim();
+    if (href) {
+      const url = await findFileInFolder(
+        allFiles,
+        getRelativePath(href, basePath)
+      );
+      const thumbUrl = img
+        ? await findFileInFolder(allFiles, getRelativePath(img.src, basePath))
+        : null;
+      if (url || thumbUrl) {
+        media.push({
+          type: "photo",
+          url: url || thumbUrl,
+          thumb: thumbUrl,
+          title,
+          description: description,
+        });
+      } else {
+        // Photo not available - add placeholder
+        media.push({
+          type: "photo",
+          url: "",
+          title,
+          description: description,
+        });
+      }
+    }
+    if (title === "Photo" && !href) {
+      media.push({
+        type: "photo",
+        url: "",
+        title,
+        description: description,
+        status,
+      });
     }
   }
 
@@ -173,6 +239,14 @@ export const parseMessage = async (
         : null;
       if (url) {
         media.push({ type: "gif", url, thumb: thumbUrl });
+      } else {
+        // GIF not available - add placeholder
+        media.push({
+          type: "gif",
+          url: null,
+          thumb: thumbUrl,
+          description: "GIF not available",
+        });
       }
     }
   }
@@ -193,6 +267,62 @@ export const parseMessage = async (
         : null;
       if (url) {
         media.push({ type: "video", url, thumb: thumbUrl, duration });
+      } else {
+        // Video not available - add placeholder
+        media.push({
+          type: "video",
+          url: null,
+          thumb: thumbUrl,
+          duration,
+          description: "Video not available",
+        });
+      }
+    }
+  }
+
+  // Legacy videos
+  const legacyVideos = messageDiv.querySelectorAll(".media_video");
+  for (const video of legacyVideos) {
+    const href = video.getAttribute("href");
+    const thumb = video.querySelector("img");
+    const duration = video.querySelector(".video_duration")?.textContent || "";
+    const title = video.querySelector(".title")?.textContent?.trim();
+    const description = video
+      .querySelector(".description")
+      ?.textContent?.trim();
+    const status = video.querySelector(".status")?.textContent?.trim();
+    if (href) {
+      const url = await findFileInFolder(
+        allFiles,
+        getRelativePath(href, basePath)
+      );
+      const thumbUrl = thumb
+        ? await findFileInFolder(allFiles, getRelativePath(thumb.src, basePath))
+        : null;
+      if (url) {
+        media.push({ type: "video", url, thumb: thumbUrl, duration });
+      } else {
+        // Video not available - add placeholder
+        media.push({
+          type: "video",
+          url: null,
+          thumb: thumbUrl,
+          duration,
+          description: "Video not available",
+        });
+      }
+    } else {
+      if (title === "Video file") {
+        // Video not available - add placeholder
+        media.push({
+          type: "video",
+          url: null,
+          thumb: null,
+          duration,
+          description,
+          title,
+          status,
+        });
       }
     }
   }
@@ -213,6 +343,15 @@ export const parseMessage = async (
         : null;
       if (url) {
         media.push({ type: "round_video", url, thumb: thumbUrl, duration });
+      } else {
+        // Round video not available - add placeholder
+        media.push({
+          type: "round_video",
+          url: null,
+          thumb: thumbUrl,
+          duration,
+          description: "Round video not available",
+        });
       }
     }
   }
@@ -229,6 +368,14 @@ export const parseMessage = async (
       );
       if (url) {
         media.push({ type: "voice", url, duration });
+      } else {
+        // Voice message not available - add placeholder
+        media.push({
+          type: "voice",
+          url: null,
+          duration,
+          description: "Voice message not available",
+        });
       }
     }
   }
@@ -276,6 +423,15 @@ export const parseMessage = async (
       );
       if (url) {
         media.push({ type: "file", url, title, size });
+      } else {
+        // File not available - add placeholder
+        media.push({
+          type: "file",
+          url: null,
+          title,
+          size,
+          description: "File not available",
+        });
       }
     }
   }
@@ -292,6 +448,13 @@ export const parseMessage = async (
       );
       if (url) {
         media.push({ type: "animation", url });
+      } else {
+        // Animation not available - add placeholder
+        media.push({
+          type: "animation",
+          url: null,
+          description: "Animation not available",
+        });
       }
     }
   }
