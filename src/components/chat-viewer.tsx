@@ -316,20 +316,113 @@ export default function ChatViewer() {
   // Upload state
   if (!chatData) {
     return (
-      <div className="flex flex-col items-center justify-center mx-auto h-screen p-8 text-center">
-        <div className="text-6xl mb-6">💬</div>
-        <h1 className="text-2xl font-semibold mb-3 text-tg-text-primary">
-          Telegram Chat Viewer
-        </h1>
-        <p className="text-[15px] text-tg-text-secondary mb-8 max-w-[400px] leading-relaxed">
-          Select your Telegram export folder to view your chat history. The
-          folder should contain messages.html files and any exported media.
-        </p>
-        <button
-          className="bg-tg-accent text-white border-none px-8 py-3.5 rounded-xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-violet-500 hover:translate-y-0.5"
-          onClick={() => fileInputRef.current?.click()}>
-          Select Export Folder
-        </button>
+      <div className="flex h-screen w-full bg-black text-tg-text-primary overflow-hidden relative">
+        {/* Dynamic Background Pattern */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-[url('/dark-pattern.svg')] opacity-[0.03]" />
+          {/* Subtle gradients using theme accent colors */}
+          <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-tg-accent/10 blur-[120px] rounded-full mix-blend-screen" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full mix-blend-screen" />
+        </div>
+
+        {/* Sidebar - Recent History */}
+        <div className="w-[320px] h-full border-r border-tg-border bg-tg-header-bg/50 backdrop-blur-xl relative z-10 flex flex-col hidden md:flex">
+          <div className="p-6 border-b border-tg-border">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="w-5 h-5 text-white"
+                  stroke="currentColor"
+                  strokeWidth="2">
+                  <path
+                    d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <span className="font-bold text-lg tracking-tight text-white">
+                Viewer
+              </span>
+            </div>
+            <p className="text-xs text-tg-text-secondary pl-11">
+              Telegram Archive
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <h3 className="text-xs font-semibold text-tg-text-secondary uppercase tracking-wider mb-4 px-2">
+              Recent History
+            </h3>
+            <RecentFolders
+              variant="sidebar"
+              onFolderClick={() => fileInputRef.current?.click()}
+            />
+          </div>
+
+          <div className="p-4 border-t border-tg-border bg-black/20">
+            <div className="flex items-center gap-3 text-xs text-tg-text-secondary">
+              <div className="w-2 h-2 rounded-full bg-green-500/50 animate-pulse" />
+              <span>System Ready</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content - Hero */}
+        <div className="flex-1 relative z-10 flex flex-col items-center justify-center p-12">
+          <div className="max-w-2xl w-full text-center space-y-8">
+            <div className="relative inline-block">
+              <div className="absolute inset-0 bg-linear-to-r from-indigo-500 to-purple-500 blur-[40px] opacity-20" />
+              <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-linear-to-b from-white to-white/60 relative">
+                Your Chats.
+                <br />
+                Reimagined.
+              </h1>
+            </div>
+
+            <p className="text-lg md:text-xl text-tg-text-secondary max-w-lg mx-auto leading-relaxed">
+              Experience your Telegram history in a beautiful, modern interface.
+              Fast, secure, and entirely local.
+            </p>
+
+            <div className="pt-8 flex flex-col items-center gap-4">
+              <button
+                className="group relative px-8 py-4 bg-white text-black rounded-2xl font-semibold text-lg transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_60px_-15px_rgba(255,255,255,0.4)] overflow-hidden cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}>
+                <div className="absolute inset-0 bg-linear-to-r from-indigo-200 via-purple-200 to-indigo-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                <span className="relative flex items-center gap-3">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  Select Export Folder
+                </span>
+              </button>
+
+              <p className="text-sm text-tg-text-secondary/70">
+                Supports standard export format
+              </p>
+            </div>
+            {/* Mobile-only recent folders */}
+            <div className="md:hidden w-full mt-12 pt-8 border-t border-tg-border">
+              <RecentFolders
+                onFolderClick={() => fileInputRef.current?.click()}
+              />
+            </div>
+          </div>
+        </div>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -340,7 +433,6 @@ export default function ChatViewer() {
           multiple
           onChange={handleFolderSelect}
         />
-        <RecentFolders onFolderClick={() => fileInputRef.current?.click()} />
       </div>
     );
   }
