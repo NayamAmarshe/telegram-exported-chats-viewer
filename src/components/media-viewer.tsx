@@ -211,13 +211,16 @@ function MediaItemRenderer({
         );
       }
       return (
-        <div className="flex items-center gap-2 p-2 min-w-[200px]">
-          <div className="w-8 h-8 bg-tg-accent rounded-full flex items-center justify-center cursor-pointer">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
+        <div className="flex items-center gap-2 p-2 min-w-[220px]">
+          <div className="w-8 h-8 bg-tg-accent rounded-full flex items-center justify-center text-sm">
+            🎤
           </div>
-          <div className="flex-1 h-6 bg-linear-to-r from-tg-accent from-40% to-tg-accent/30 rounded-xl"></div>
+          <audio
+            src={item.url}
+            controls
+            preload="metadata"
+            className="h-8 max-w-[220px]"
+          />
           {item.duration && (
             <span className="text-xs text-tg-text-secondary">
               {item.duration}
@@ -270,7 +273,7 @@ function MediaItemRenderer({
           <div>
             <div className="text-tg-text-primary">Location</div>
             {item.coords && (
-              <div className="text-xs text-tg-text-secondary">
+              <div className="text-xs text-tg-text-primary/60">
                 {item.coords}
               </div>
             )}
@@ -303,7 +306,7 @@ function MediaItemRenderer({
           <span className="text-xl">📞</span>
           <span className="text-tg-text-primary">{item.name}</span>
           {item.status && (
-            <span className="text-xs text-tg-text-secondary">
+            <span className="text-xs text-tg-text-primary/60">
               {item.status}
             </span>
           )}
