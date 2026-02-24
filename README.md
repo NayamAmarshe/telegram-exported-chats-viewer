@@ -2,7 +2,7 @@
 
 A beautiful, private way to browse your Telegram chat history — entirely on your own device. No account needed, no data sent anywhere.
 
-![Home screen](screenshot.png)
+![Home screen](public/og-image.png)
 
 ---
 

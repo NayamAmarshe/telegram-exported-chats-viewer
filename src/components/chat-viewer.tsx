@@ -24,7 +24,7 @@ const MESSAGES_PER_PAGE = 50;
 
 // Process messages to inherit "from" for joined messages
 function processMessagesWithInheritance(
-  messages: ParsedMessage[]
+  messages: ParsedMessage[],
 ): ParsedMessage[] {
   let lastFrom = "";
   let lastInitials = "";
@@ -56,7 +56,7 @@ export default function ChatViewer() {
   const [loading, setLoading] = useAtom(loadingAtom);
   const [loadingProgress, setLoadingProgress] = useAtom(loadingProgressAtom);
   const [scrollToMessageId, setScrollToMessageId] = useAtom(
-    scrollToMessageIdAtom
+    scrollToMessageIdAtom,
   );
   const [searchOpen] = useAtom(searchOpenAtom);
   const [recentFolders, setRecentFolders] = useAtom(recentFoldersAtom);
@@ -100,7 +100,7 @@ export default function ChatViewer() {
       setLoadingMore(true);
       setTimeout(() => {
         setDisplayedCount((prev) =>
-          Math.min(prev + MESSAGES_PER_PAGE, chatData.messages.length)
+          Math.min(prev + MESSAGES_PER_PAGE, chatData.messages.length),
         );
         setLoadingMore(false);
       }, 300);
@@ -138,7 +138,7 @@ export default function ChatViewer() {
 
     // Find the message index
     const messageIndex = chatData.messages.findIndex(
-      (m) => m.id === scrollToMessageId
+      (m) => m.id === scrollToMessageId,
     );
     if (messageIndex === -1) return;
 
@@ -150,7 +150,7 @@ export default function ChatViewer() {
       const chunkSize = 500;
       const nextCount = Math.min(
         displayedCount + chunkSize,
-        chatData.messages.length
+        chatData.messages.length,
       );
 
       // Update count and let render happen
@@ -187,13 +187,13 @@ export default function ChatViewer() {
 
         // Find HTML files
         const htmlFiles = allFiles.filter(
-          (f) => f.name.endsWith(".html") && f.name.startsWith("messages")
+          (f) => f.name.endsWith(".html") && f.name.startsWith("messages"),
         );
         htmlFiles.sort((a, b) => a.name.localeCompare(b.name));
 
         if (htmlFiles.length === 0) {
           alert(
-            "No message HTML files found. Please select a Telegram export folder containing messages.html files."
+            "No message HTML files found. Please select a Telegram export folder containing messages.html files.",
           );
           setLoading(false);
           return;
@@ -208,7 +208,7 @@ export default function ChatViewer() {
         for (let i = 0; i < htmlFiles.length; i++) {
           const file = htmlFiles[i];
           setLoadingProgress(
-            `Parsing ${file.name} (${i + 1}/${htmlFiles.length})...`
+            `Parsing ${file.name} (${i + 1}/${htmlFiles.length})...`,
           );
 
           const htmlContent = await file.text();
@@ -293,12 +293,12 @@ export default function ChatViewer() {
       } catch (error) {
         console.error("Error parsing chat:", error);
         alert(
-          "Error parsing chat files. Please check the console for details."
+          "Error parsing chat files. Please check the console for details.",
         );
         setLoading(false);
       }
     },
-    [setChatData, setLoading, setLoadingProgress]
+    [setChatData, setLoading, setLoadingProgress],
   );
 
   // Loading state
@@ -344,11 +344,11 @@ export default function ChatViewer() {
                 </svg>
               </div>
               <span className="font-bold text-lg tracking-tight text-white">
-                Viewer
+                Telegram
               </span>
             </div>
             <p className="text-xs text-tg-text-secondary pl-11">
-              Telegram Archive
+              Exported Chats Viewer
             </p>
           </div>
 
@@ -360,13 +360,6 @@ export default function ChatViewer() {
               variant="sidebar"
               onFolderClick={() => fileInputRef.current?.click()}
             />
-          </div>
-
-          <div className="p-4 border-t border-tg-border bg-black/20">
-            <div className="flex items-center gap-3 text-xs text-tg-text-secondary">
-              <div className="w-2 h-2 rounded-full bg-green-500/50 animate-pulse" />
-              <span>System Ready</span>
-            </div>
           </div>
         </div>
 
