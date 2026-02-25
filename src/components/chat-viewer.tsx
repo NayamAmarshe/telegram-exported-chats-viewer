@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import { useAtom } from "jotai";
+import { Link } from "@tanstack/react-router";
 import { GithubIcon, Loader2 } from "lucide-react";
 import type { ParsedMessage } from "../lib/file-handler";
 import { parseHTML } from "../lib/file-handler";
@@ -360,6 +361,26 @@ export default function ChatViewer() {
               variant="sidebar"
               onFolderClick={() => fileInputRef.current?.click()}
             />
+          </div>
+
+          {/* Tools section — pinned at bottom of sidebar */}
+          <div className="border-t border-tg-border p-4 shrink-0">
+            <h3 className="text-xs font-semibold text-tg-text-secondary uppercase tracking-wider mb-3 px-2">
+              Tools
+            </h3>
+            <Link
+              to="/tools/markdown"
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-tg-text-secondary hover:text-white hover:bg-tg-accent/10 transition-all duration-150 group">
+              <span className="text-lg leading-none">✏️</span>
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-tg-text-primary group-hover:text-white transition-colors truncate">
+                  Markdown Converter
+                </div>
+                <div className="text-[11px] text-tg-text-secondary truncate">
+                  Convert to Telegram format
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
 
