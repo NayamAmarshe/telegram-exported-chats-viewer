@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import { useAtom } from "jotai";
-import { Loader2 } from "lucide-react";
+import { GithubIcon, Loader2 } from "lucide-react";
 import type { ParsedMessage } from "../lib/file-handler";
 import { parseHTML } from "../lib/file-handler";
 import { parseMessage } from "../lib/parser";
@@ -367,8 +367,8 @@ export default function ChatViewer() {
         <div className="flex-1 relative z-10 flex flex-col items-center justify-center p-12">
           <div className="max-w-2xl w-full text-center space-y-8">
             <div className="relative inline-block">
-              <div className="absolute inset-0 bg-linear-to-r from-indigo-500 to-purple-500 blur-[40px] opacity-20" />
-              <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-linear-to-b from-white to-white/60 relative">
+              <div className="absolute inset-0 bg-linear-to-r from-indigo-500 to-purple-500 blur-2xl opacity-20" />
+              <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-linear-to-b from-white to-white/60 relative pb-2">
                 Your Chats.
                 <br />
                 Reimagined.
@@ -376,8 +376,16 @@ export default function ChatViewer() {
             </div>
 
             <p className="text-lg md:text-xl text-tg-text-secondary max-w-lg mx-auto leading-relaxed">
-              Experience your Telegram history in a beautiful, modern interface.
-              Fast, secure, and entirely local.
+              Experience your Telegram history in a beautiful, modern interface.{" "}
+              <a
+                className="underline cursor-pointer hover:text-white/80 inline-flex items-center gap-2 transition-colors"
+                href="https://github.com/NayamAmarshe/telegram-exported-chats-viewer"
+                target="_blank"
+                rel="noopener noreferrer">
+                <GithubIcon className="size-5" />
+                Free & Open Source
+              </a>
+              , fast, and everything stays on your device.
             </p>
 
             <div className="pt-8 flex flex-col items-center gap-4">
@@ -404,7 +412,7 @@ export default function ChatViewer() {
               </button>
 
               <p className="text-sm text-tg-text-secondary/70">
-                Supports standard export format
+                Supports standard HTML export format
               </p>
             </div>
             {/* Mobile-only recent folders */}
