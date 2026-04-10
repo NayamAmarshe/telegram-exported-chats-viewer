@@ -252,6 +252,11 @@ function getPreferredSenderKey(message: ParsedMessage): string | null {
   return null;
 }
 
+function getSenderClassKey(message: ParsedMessage): string | null {
+  if (message.type === "service") return null;
+  return message.userpicClass ?? null;
+}
+
 export default function ChatViewer() {
   const [chatData, setChatData] = useAtom(chatDataAtom);
   const [loading, setLoading] = useAtom(loadingAtom);
@@ -304,6 +309,24 @@ export default function ChatViewer() {
       const senderKey = getPreferredSenderKey(message);
       if (senderKey) {
         keys.add(senderKey);
+      }
+    }
+
+    return keys;
+  }, [chatData]);
+  const chatContactSenderClassKeys = useMemo(() => {
+    if (!chatData) {
+      return new Set<string>();
+    }
+
+    const keys = new Set<string>();
+    for (const message of chatData.messages) {
+      if (message.type !== "message") continue;
+      if (message.from !== chatData.name) continue;
+
+      const senderClassKey = getSenderClassKey(message);
+      if (senderClassKey) {
+        keys.add(senderClassKey);
       }
     }
 
@@ -966,9 +989,13 @@ export default function ChatViewer() {
           const index = windowRange.start + offset;
           // Direction logic
           const senderKey = getPreferredSenderKey(message);
+          const senderClassKey = getSenderClassKey(message);
           const isFromContact =
             message.from === chatContactName ||
-            (senderKey ? chatContactSenderKeys.has(senderKey) : false);
+            (senderKey ? chatContactSenderKeys.has(senderKey) : false) ||
+            (senderClassKey
+              ? chatContactSenderClassKeys.has(senderClassKey)
+              : false);
           const isOutgoing = !isFromContact && message.from !== "";
 
           // Service messages are date markers (invisible, used for tracking)
