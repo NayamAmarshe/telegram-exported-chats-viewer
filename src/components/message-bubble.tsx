@@ -27,12 +27,12 @@ export default function MessageBubble({
   const isSticker =
     hasMedia &&
     message.media?.some(
-      (m) => m.type === "sticker" || m.type === "animated_sticker"
+      (m) => m.type === "sticker" || m.type === "animated_sticker",
     );
 
   return (
     <div
-      className={`flex gap-2 mb-0.5 ${isOutgoing ? "justify-end" : "justify-start"}`}>
+      className={`flex gap-2 mb-1 ${isOutgoing ? "justify-end" : "justify-start"}`}>
       {/* Avatar for incoming messages */}
       {!isOutgoing && showAvatar && (
         <div
@@ -46,11 +46,11 @@ export default function MessageBubble({
       {/* Message bubble */}
       <div
         className={`
-        px-3 py-2 rounded-2xl relative max-w-2xl
+        px-3 py-2 rounded-2xl relative max-w-xs sm:max-w-sm md:max-w-2xl wrap-break-word
         ${isSticker ? "bg-transparent max-w-[180px]" : ""}
         ${
           isOutgoing
-            ? "bg-tg-bubble-outgoing rounded-br-sm"
+            ? "bg-tg-bubble-outgoing rounded-br-sm ml-6!"
             : "bg-tg-bubble-incoming rounded-bl-sm"
         }
       `}>
@@ -59,7 +59,7 @@ export default function MessageBubble({
           <div
             className={cn(
               "bg-black/10 px-2 py-1 rounded-sm border-l-3 border-tg-accent mb-1",
-              isOutgoing ? "border-tg-text-primary" : "border-tg-accent"
+              isOutgoing ? "border-tg-text-primary" : "border-tg-accent",
             )}>
             {/* Show sender name if available */}
             {message.replyTo.senderName && (
