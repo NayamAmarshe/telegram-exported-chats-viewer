@@ -3,7 +3,7 @@ import { useAtom } from "jotai";
 import { Link } from "@tanstack/react-router";
 import { GithubIcon, Loader2 } from "lucide-react";
 import type { ParsedMessage } from "../lib/file-handler";
-import { parseHTML } from "../lib/file-handler";
+import { clearFileCaches, parseHTML } from "../lib/file-handler";
 import { parseMessage } from "../lib/parser";
 import {
   chatDataAtom,
@@ -374,6 +374,7 @@ export default function ChatViewer() {
     return () => {
       rowObserversRef.current.forEach((observer) => observer.disconnect());
       rowObserversRef.current.clear();
+      clearFileCaches();
     };
   }, []);
 
@@ -639,6 +640,8 @@ export default function ChatViewer() {
       setLoadingProgress("Reading files...");
 
       try {
+        clearFileCaches();
+
         const allFiles = Array.from(files);
 
         // Find HTML files

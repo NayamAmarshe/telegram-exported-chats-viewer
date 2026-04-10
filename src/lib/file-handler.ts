@@ -53,6 +53,18 @@ export interface ChatInfo {
   messages: ParsedMessage[];
 }
 
+const fileObjectUrlCache = new Map<string, string>();
+const fileLookupCache = new Map<string, File | null>();
+
+export const clearFileCaches = () => {
+  for (const objectUrl of fileObjectUrlCache.values()) {
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  fileObjectUrlCache.clear();
+  fileLookupCache.clear();
+};
+
 export const getRelativePath = (
   href: string | null,
   basePath: string
@@ -67,11 +79,30 @@ export const findFileInFolder = async (
   path: string | null
 ): Promise<string | null> => {
   if (!path) return null;
-  for (const file of files) {
-    if (file.webkitRelativePath === path) {
-      return URL.createObjectURL(file);
-    }
+
+  const cachedObjectUrl = fileObjectUrlCache.get(path);
+  if (cachedObjectUrl) {
+    return cachedObjectUrl;
   }
+
+  let resolvedFile = fileLookupCache.get(path);
+  if (resolvedFile === undefined) {
+    resolvedFile = null;
+    for (const file of files) {
+      if (file.webkitRelativePath === path) {
+        resolvedFile = file;
+        break;
+      }
+    }
+    fileLookupCache.set(path, resolvedFile);
+  }
+
+  if (resolvedFile) {
+    const objectUrl = URL.createObjectURL(resolvedFile);
+    fileObjectUrlCache.set(path, objectUrl);
+    return objectUrl;
+  }
+
   return null;
 };
 
