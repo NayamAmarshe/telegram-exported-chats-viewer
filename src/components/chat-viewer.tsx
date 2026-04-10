@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect, useMemo, useState } from "react";
 import { useAtom } from "jotai";
 import { Link } from "@tanstack/react-router";
 import { GithubIcon, Loader2 } from "lucide-react";
@@ -21,7 +21,193 @@ import SearchPanel from "./search-panel";
 import RecentFolders from "./recent-folders";
 
 // Pagination settings
-const MESSAGES_PER_PAGE = 50;
+const INITIAL_WINDOW_SIZE = 160;
+const WINDOW_STEP_SIZE = 80;
+const MAX_WINDOW_SIZE = 320;
+const JUMP_WINDOW_SIZE = 200;
+const WINDOW_EDGE_THRESHOLD_PX = 800;
+const DEFAULT_MESSAGE_HEIGHT = 88;
+const DEFAULT_SERVICE_HEIGHT = 40;
+
+interface DateNavigationData {
+  dates: string[];
+  dateLabelByIso: Map<string, string>;
+  dateByServiceIndex: Map<number, string>;
+  serviceIndexByDate: Map<string, number>;
+  targetMessageIdByDate: Map<string, string>;
+}
+
+interface MessageWindowRange {
+  start: number;
+  end: number;
+}
+
+interface PendingNavigation {
+  type: "message" | "date";
+  targetMessageId: string;
+  targetDate?: string;
+}
+
+function formatDateLabel(date: string): string {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+
+  return parsed.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function buildDateNavigationData(messages: ParsedMessage[]): DateNavigationData {
+  const dates: string[] = [];
+  const dateLabelByIso = new Map<string, string>();
+  const dateByServiceIndex = new Map<number, string>();
+  const serviceIndexByDate = new Map<string, number>();
+  const targetMessageIdByDate = new Map<string, string>();
+  let pendingService: { index: number; label: string } | null = null;
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+
+    if (message.type === "service") {
+      const label = message.text?.trim();
+      if (label) {
+        pendingService = { index, label };
+      }
+      continue;
+    }
+
+    if (!message.date || dateLabelByIso.has(message.date)) {
+      continue;
+    }
+
+    dates.push(message.date);
+    targetMessageIdByDate.set(message.date, message.id);
+
+    if (pendingService) {
+      dateLabelByIso.set(message.date, pendingService.label);
+      dateByServiceIndex.set(pendingService.index, message.date);
+      serviceIndexByDate.set(message.date, pendingService.index);
+      pendingService = null;
+      continue;
+    }
+
+    dateLabelByIso.set(message.date, formatDateLabel(message.date));
+  }
+
+  return {
+    dates,
+    dateLabelByIso,
+    dateByServiceIndex,
+    serviceIndexByDate,
+    targetMessageIdByDate,
+  };
+}
+
+function resolveDateTarget(selectedDate: string, availableDates: string[]) {
+  for (const availableDate of availableDates) {
+    if (availableDate >= selectedDate) {
+      return availableDate;
+    }
+  }
+
+  return availableDates.at(-1) ?? null;
+}
+
+function getTelegramMessagesFileOrder(fileName: string): number {
+  if (fileName === "messages.html") {
+    return 1;
+  }
+
+  const match = fileName.match(/^messages(\d+)\.html$/);
+  if (!match) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return Number(match[1]);
+}
+
+function getInitialWindowRange(totalMessages: number): MessageWindowRange {
+  return {
+    start: 0,
+    end: Math.min(INITIAL_WINDOW_SIZE, totalMessages),
+  };
+}
+
+function getWindowRangeAroundIndex(
+  targetIndex: number,
+  totalMessages: number,
+): MessageWindowRange {
+  const clampedStart = Math.max(
+    0,
+    Math.min(
+      targetIndex - Math.floor(JUMP_WINDOW_SIZE / 2),
+      Math.max(0, totalMessages - JUMP_WINDOW_SIZE),
+    ),
+  );
+
+  return {
+    start: clampedStart,
+    end: Math.min(totalMessages, clampedStart + JUMP_WINDOW_SIZE),
+  };
+}
+
+function estimateMessageHeight(message: ParsedMessage): number {
+  if (message.type === "service") {
+    return DEFAULT_SERVICE_HEIGHT;
+  }
+
+  let estimatedHeight = DEFAULT_MESSAGE_HEIGHT;
+
+  if (message.replyTo) {
+    estimatedHeight += 44;
+  }
+
+  if (message.text) {
+    estimatedHeight += Math.min(
+      140,
+      Math.ceil(message.text.length / 42) * 18,
+    );
+  }
+
+  if (message.media && message.media.length > 0) {
+    estimatedHeight += 180;
+  }
+
+  return estimatedHeight;
+}
+
+function estimateRangeHeight(
+  messages: ParsedMessage[],
+  start: number,
+  end: number,
+  measuredHeights: Map<number, number>,
+): number {
+  let totalHeight = 0;
+
+  for (let index = start; index < end; index += 1) {
+    totalHeight +=
+      measuredHeights.get(index) ?? estimateMessageHeight(messages[index]);
+  }
+
+  return totalHeight;
+}
+
+function findFirstDateInRange(
+  messages: ParsedMessage[],
+  start: number,
+  end: number,
+): string | null {
+  for (let index = start; index < end; index += 1) {
+    const message = messages[index];
+    if (message.type === "message" && message.date) {
+      return message.date;
+    }
+  }
+
+  return null;
+}
 
 // Process messages to inherit "from" for joined messages
 function processMessagesWithInheritance(
@@ -52,6 +238,20 @@ function processMessagesWithInheritance(
   });
 }
 
+function getPreferredSenderKey(message: ParsedMessage): string | null {
+  if (message.type === "service") return null;
+
+  if (message.userpicClass && message.initials) {
+    return `${message.userpicClass}:${message.initials}`;
+  }
+
+  if (message.from) {
+    return message.from.trim().toLowerCase();
+  }
+
+  return null;
+}
+
 export default function ChatViewer() {
   const [chatData, setChatData] = useAtom(chatDataAtom);
   const [loading, setLoading] = useAtom(loadingAtom);
@@ -61,18 +261,78 @@ export default function ChatViewer() {
   );
   const [searchOpen] = useAtom(searchOpenAtom);
   const [recentFolders, setRecentFolders] = useAtom(recentFoldersAtom);
-  const [displayedCount, setDisplayedCount] = useState(MESSAGES_PER_PAGE);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const totalMessages = chatData?.messages.length ?? 0;
+  const [windowRange, setWindowRange] = useState<MessageWindowRange>(() =>
+    getInitialWindowRange(totalMessages),
+  );
   const [currentDate, setCurrentDate] = useState<string | null>(null);
+  const [scrollToDate, setScrollToDate] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
   const [navigatingToMessage, setNavigatingToMessage] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [navigatingToDate, setNavigatingToDate] = useState(false);
+  const [pendingNavigation, setPendingNavigation] =
+    useState<PendingNavigation | null>(null);
+  const [measuredHeightsVersion, setMeasuredHeightsVersion] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const dateMarkersRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const messageRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const measuredHeightsRef = useRef<Map<number, number>>(new Map());
+  const rowObserversRef = useRef<Map<number, ResizeObserver>>(new Map());
+  const dateNavigation = useMemo(
+    () => buildDateNavigationData(chatData?.messages ?? []),
+    [chatData],
+  );
+  const visibleMessages = useMemo(
+    () =>
+      chatData ? chatData.messages.slice(windowRange.start, windowRange.end) : [],
+    [chatData, windowRange.end, windowRange.start],
+  );
+  const chatContactSenderKeys = useMemo(() => {
+    if (!chatData) {
+      return new Set<string>();
+    }
+
+    const keys = new Set<string>();
+    for (const message of chatData.messages) {
+      if (message.type !== "message") continue;
+      if (message.from !== chatData.name) continue;
+
+      const senderKey = getPreferredSenderKey(message);
+      if (senderKey) {
+        keys.add(senderKey);
+      }
+    }
+
+    return keys;
+  }, [chatData]);
+  const topSpacerHeight = useMemo(
+    () =>
+      chatData
+        ? estimateRangeHeight(
+            chatData.messages,
+            0,
+            windowRange.start,
+            measuredHeightsRef.current,
+          )
+        : 0,
+    [chatData, measuredHeightsVersion, windowRange.start],
+  );
+  const bottomSpacerHeight = useMemo(
+    () =>
+      chatData
+        ? estimateRangeHeight(
+            chatData.messages,
+            windowRange.end,
+            chatData.messages.length,
+            measuredHeightsRef.current,
+          )
+        : 0,
+    [chatData, measuredHeightsVersion, windowRange.end],
+  );
 
   // Load recent folders from localStorage on mount
   useEffect(() => {
@@ -87,42 +347,139 @@ export default function ChatViewer() {
     }
   }, [setRecentFolders]);
 
-  // Track which date is visible using scroll position
-  const handleScroll = useCallback(() => {
-    if (!messagesAreaRef.current || !chatData || loadingMore) return;
+  useEffect(() => {
+    return () => {
+      rowObserversRef.current.forEach((observer) => observer.disconnect());
+      rowObserversRef.current.clear();
+    };
+  }, []);
 
-    const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+  const recordRowHeight = useCallback((index: number, element: HTMLDivElement) => {
+    const nextHeight = element.offsetHeight;
+    const previousHeight = measuredHeightsRef.current.get(index);
 
-    // Load more when near the bottom
-    if (
-      scrollHeight - scrollTop - clientHeight < 200 &&
-      displayedCount < chatData.messages.length
-    ) {
-      setLoadingMore(true);
-      setTimeout(() => {
-        setDisplayedCount((prev) =>
-          Math.min(prev + MESSAGES_PER_PAGE, chatData.messages.length),
-        );
-        setLoadingMore(false);
-      }, 300);
+    if (previousHeight !== nextHeight) {
+      measuredHeightsRef.current.set(index, nextHeight);
+      setMeasuredHeightsVersion((previous) => previous + 1);
     }
+  }, []);
 
-    // Find which date marker is at or above the top of the scroll area
+  const bindRowRef = useCallback(
+    (index: number, messageId?: string, markerDate?: string) =>
+      (element: HTMLDivElement | null) => {
+        const existingObserver = rowObserversRef.current.get(index);
+        if (existingObserver) {
+          existingObserver.disconnect();
+          rowObserversRef.current.delete(index);
+        }
+
+        if (messageId) {
+          if (element) {
+            messageRefsMap.current.set(messageId, element);
+          } else {
+            messageRefsMap.current.delete(messageId);
+          }
+        }
+
+        if (markerDate) {
+          if (element) {
+            dateMarkersRef.current.set(markerDate, element);
+          } else {
+            dateMarkersRef.current.delete(markerDate);
+          }
+        }
+
+        if (!element) {
+          return;
+        }
+
+        recordRowHeight(index, element);
+
+        if (typeof ResizeObserver !== "undefined") {
+          const observer = new ResizeObserver(() => {
+            recordRowHeight(index, element);
+          });
+          observer.observe(element);
+          rowObserversRef.current.set(index, observer);
+        }
+      },
+    [recordRowHeight],
+  );
+
+  const updateCurrentDateFromViewport = useCallback(() => {
+    if (!messagesAreaRef.current || !chatData) return;
+
     const containerTop = messagesAreaRef.current.getBoundingClientRect().top;
     let currentVisibleDate: string | null = null;
 
     for (const [date, element] of dateMarkersRef.current) {
       const rect = element.getBoundingClientRect();
-      // If the marker is at or above the container top, this is our current date
       if (rect.top <= containerTop + 20) {
         currentVisibleDate = date;
       }
     }
 
+    if (!currentVisibleDate) {
+      currentVisibleDate = findFirstDateInRange(
+        chatData.messages,
+        windowRange.start,
+        windowRange.end,
+      );
+    }
+
     if (currentVisibleDate !== currentDate) {
       setCurrentDate(currentVisibleDate);
     }
-  }, [chatData, displayedCount, loadingMore, currentDate]);
+  }, [chatData, currentDate, windowRange.end, windowRange.start]);
+
+  const maybeShiftWindow = useCallback(() => {
+    if (!messagesAreaRef.current || !chatData || pendingNavigation) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+    const renderedTopOffset = scrollTop - topSpacerHeight;
+    const renderedBottomOffset =
+      scrollHeight - bottomSpacerHeight - (scrollTop + clientHeight);
+
+    if (renderedTopOffset < WINDOW_EDGE_THRESHOLD_PX && windowRange.start > 0) {
+      const nextStart = Math.max(0, windowRange.start - WINDOW_STEP_SIZE);
+      const nextEnd = Math.min(
+        chatData.messages.length,
+        Math.max(windowRange.end, nextStart + MAX_WINDOW_SIZE),
+      );
+
+      if (nextStart !== windowRange.start || nextEnd !== windowRange.end) {
+        setWindowRange({ start: nextStart, end: nextEnd });
+        return;
+      }
+    }
+
+    if (
+      renderedBottomOffset < WINDOW_EDGE_THRESHOLD_PX &&
+      windowRange.end < chatData.messages.length
+    ) {
+      const nextEnd = Math.min(
+        chatData.messages.length,
+        windowRange.end + WINDOW_STEP_SIZE,
+      );
+      const nextStart = Math.max(0, nextEnd - MAX_WINDOW_SIZE);
+
+      if (nextStart !== windowRange.start || nextEnd !== windowRange.end) {
+        setWindowRange({ start: nextStart, end: nextEnd });
+      }
+    }
+  }, [
+    bottomSpacerHeight,
+    chatData,
+    pendingNavigation,
+    topSpacerHeight,
+    windowRange.end,
+    windowRange.start,
+  ]);
+
+  const handleScroll = useCallback(() => {
+    maybeShiftWindow();
+    updateCurrentDateFromViewport();
+  }, [maybeShiftWindow, updateCurrentDateFromViewport]);
 
   useEffect(() => {
     const area = messagesAreaRef.current;
@@ -132,48 +489,123 @@ export default function ChatViewer() {
     }
   }, [handleScroll]);
 
-  // Handle scroll to message from search
-  // Handle scroll to message from search with chunked loading
+  useEffect(() => {
+    updateCurrentDateFromViewport();
+  }, [updateCurrentDateFromViewport, visibleMessages.length, windowRange]);
+
   useEffect(() => {
     if (!scrollToMessageId || !chatData) return;
 
-    // Find the message index
-    const messageIndex = chatData.messages.findIndex(
-      (m) => m.id === scrollToMessageId,
-    );
-    if (messageIndex === -1) return;
-
-    // If message is far ahead, load in chunks to prevent freeze
-    if (messageIndex >= displayedCount) {
-      setNavigatingToMessage(true);
-
-      // Load larger chunk if we're far behind
-      const chunkSize = 500;
-      const nextCount = Math.min(
-        displayedCount + chunkSize,
-        chatData.messages.length,
-      );
-
-      // Update count and let render happen
-      setDisplayedCount(nextCount);
+    const messageIndex = chatData.messages.findIndex((m) => m.id === scrollToMessageId);
+    if (messageIndex === -1) {
+      setScrollToMessageId(null);
       return;
     }
 
-    // Message is now loaded (or was already loaded)
-    setNavigatingToMessage(false);
+    setNavigatingToMessage(true);
+    setPendingNavigation({
+      type: "message",
+      targetMessageId: scrollToMessageId,
+    });
+    setWindowRange(getWindowRangeAroundIndex(messageIndex, chatData.messages.length));
+  }, [chatData, scrollToMessageId, setScrollToMessageId]);
 
-    // Wait for render then scroll
-    setTimeout(() => {
-      const element = messageRefsMap.current.get(scrollToMessageId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-        // Highlight the message temporarily
-        setHighlightedMessageId(scrollToMessageId);
-        setTimeout(() => setHighlightedMessageId(null), 2000);
+  useEffect(() => {
+    if (!scrollToDate || !chatData) return;
+
+    const targetMessageId = dateNavigation.targetMessageIdByDate.get(scrollToDate);
+    if (!targetMessageId) {
+      setScrollToDate(null);
+      return;
+    }
+
+    const messageIndex = chatData.messages.findIndex((m) => m.id === targetMessageId);
+    if (messageIndex === -1) {
+      setScrollToDate(null);
+      return;
+    }
+
+    const targetIndex =
+      dateNavigation.serviceIndexByDate.get(scrollToDate) ?? messageIndex;
+
+    setNavigatingToDate(true);
+    setPendingNavigation({
+      type: "date",
+      targetMessageId,
+      targetDate: scrollToDate,
+    });
+    setWindowRange(getWindowRangeAroundIndex(targetIndex, chatData.messages.length));
+  }, [chatData, dateNavigation.serviceIndexByDate, dateNavigation.targetMessageIdByDate, scrollToDate]);
+
+  useEffect(() => {
+    if (!pendingNavigation) return;
+
+    const timer = window.setTimeout(() => {
+      const messageElement = messageRefsMap.current.get(
+        pendingNavigation.targetMessageId,
+      );
+      const dateElement = pendingNavigation.targetDate
+        ? dateMarkersRef.current.get(pendingNavigation.targetDate)
+        : null;
+      const targetElement =
+        pendingNavigation.type === "date"
+          ? dateElement ?? messageElement
+          : messageElement;
+
+      if (!targetElement) {
+        return;
       }
-      setScrollToMessageId(null);
-    }, 100);
-  }, [scrollToMessageId, chatData, displayedCount, setScrollToMessageId]);
+
+      targetElement.scrollIntoView({
+        behavior: "smooth",
+        block: pendingNavigation.type === "date" ? "start" : "center",
+      });
+
+      if (pendingNavigation.type === "message") {
+        setHighlightedMessageId(pendingNavigation.targetMessageId);
+        window.setTimeout(() => setHighlightedMessageId(null), 2000);
+        setScrollToMessageId(null);
+        setNavigatingToMessage(false);
+      } else {
+        if (pendingNavigation.targetDate) {
+          setCurrentDate(pendingNavigation.targetDate);
+        }
+        setScrollToDate(null);
+        setNavigatingToDate(false);
+      }
+
+      setPendingNavigation(null);
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [pendingNavigation, setScrollToMessageId]);
+
+  const handleDatePillClick = useCallback(() => {
+    const input = dateInputRef.current;
+    if (!input || dateNavigation.dates.length === 0) return;
+
+    input.value = currentDate ?? dateNavigation.dates[0];
+
+    if ("showPicker" in input && typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.click();
+  }, [currentDate, dateNavigation.dates]);
+
+  const handleDateChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedDate = event.target.value;
+      if (!selectedDate) return;
+
+      const targetDate = resolveDateTarget(selectedDate, dateNavigation.dates);
+      if (!targetDate) return;
+
+      setScrollToDate(targetDate);
+    },
+    [dateNavigation.dates],
+  );
 
   const handleFolderSelect = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,7 +622,11 @@ export default function ChatViewer() {
         const htmlFiles = allFiles.filter(
           (f) => f.name.endsWith(".html") && f.name.startsWith("messages"),
         );
-        htmlFiles.sort((a, b) => a.name.localeCompare(b.name));
+        htmlFiles.sort(
+          (a, b) =>
+            getTelegramMessagesFileOrder(a.name) -
+            getTelegramMessagesFileOrder(b.name),
+        );
 
         if (htmlFiles.length === 0) {
           alert(
@@ -286,10 +722,20 @@ export default function ChatViewer() {
         setRecentFolders(updatedRecent);
         localStorage.setItem("recentFolders", JSON.stringify(updatedRecent));
 
-        // Reset pagination and date refs
-        setDisplayedCount(MESSAGES_PER_PAGE);
+        // Reset buffered window and refs
+        setWindowRange(getInitialWindowRange(processedMessages.length));
         dateMarkersRef.current.clear();
+        messageRefsMap.current.clear();
+        measuredHeightsRef.current.clear();
+        rowObserversRef.current.forEach((observer) => observer.disconnect());
+        rowObserversRef.current.clear();
+        setMeasuredHeightsVersion(0);
         setCurrentDate(null);
+        setScrollToDate(null);
+        setScrollToMessageId(null);
+        setPendingNavigation(null);
+        setNavigatingToMessage(false);
+        setNavigatingToDate(false);
         setLoading(false);
       } catch (error) {
         console.error("Error parsing chat:", error);
@@ -462,33 +908,52 @@ export default function ChatViewer() {
   // Message direction logic
   const chatContactName = chatData.name;
 
-  // Get messages to display (start from beginning, load more on scroll down)
-  const displayedMessages = chatData.messages.slice(0, displayedCount);
-
   return (
     <div className="flex flex-col h-screen relative">
       <ChatHeader name={chatData.name} status="last seen recently" />
       {searchOpen && <SearchPanel />}
 
       <div
-        className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 relative"
+        className="flex-1 overflow-y-auto p-4 flex flex-col relative"
         ref={messagesAreaRef}>
         {/* Single sticky date badge - positioned inside scroll container */}
         {currentDate && (
-          <div className="sticky top-0 z-20 flex justify-center py-2 pointer-events-none">
-            <span className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg backdrop-blur-sm">
-              {currentDate}
-            </span>
+          <div className="sticky top-0 z-20 flex justify-center py-2">
+            <button
+              type="button"
+              onClick={handleDatePillClick}
+              className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg backdrop-blur-sm cursor-pointer transition-colors hover:bg-black/60 active:bg-black/70">
+              {dateNavigation.dateLabelByIso.get(currentDate) ?? currentDate}
+            </button>
+            <input
+              ref={dateInputRef}
+              type="date"
+              tabIndex={-1}
+              min={dateNavigation.dates[0]}
+              max={dateNavigation.dates.at(-1)}
+              className="absolute opacity-0 pointer-events-none w-px h-px"
+              onChange={handleDateChange}
+            />
           </div>
         )}
 
+        {topSpacerHeight > 0 && (
+          <div
+            aria-hidden="true"
+            style={{ height: `${topSpacerHeight}px` }}
+            className="shrink-0"
+          />
+        )}
+
         {/* Loading overlay when navigating to far message */}
-        {navigatingToMessage && (
+        {(navigatingToMessage || navigatingToDate) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[1px] pointer-events-none">
             <div className="bg-black/80 px-4 py-3 rounded-xl flex items-center gap-3 text-white shadow-2xl">
               <Loader2 className="animate-spin text-tg-accent" size={24} />
               <div className="flex flex-col">
-                <span className="font-medium">Locating message...</span>
+                <span className="font-medium">
+                  {navigatingToDate ? "Jumping to date..." : "Locating message..."}
+                </span>
                 <span className="text-xs text-tg-text-secondary">
                   Loading history
                 </span>
@@ -496,25 +961,31 @@ export default function ChatViewer() {
             </div>
           </div>
         )}
-        {displayedMessages.map((message, index) => {
+
+        {visibleMessages.map((message, offset) => {
+          const index = windowRange.start + offset;
           // Direction logic
-          const isFromContact = message.from === chatContactName;
+          const senderKey = getPreferredSenderKey(message);
+          const isFromContact =
+            message.from === chatContactName ||
+            (senderKey ? chatContactSenderKeys.has(senderKey) : false);
           const isOutgoing = !isFromContact && message.from !== "";
 
           // Service messages are date markers (invisible, used for tracking)
           if (message.type === "service") {
-            const dateText = message.text || "";
+            const markerDate = dateNavigation.dateByServiceIndex.get(index);
+            const dateText =
+              (markerDate && dateNavigation.dateLabelByIso.get(markerDate)) ||
+              message.text ||
+              "";
+
             return (
               <div
                 key={message.id || `service-${index}`}
-                ref={(el) => {
-                  if (el && dateText) {
-                    dateMarkersRef.current.set(dateText, el);
-                  }
-                }}
+                ref={bindRowRef(index, undefined, markerDate)}
                 className="flex justify-center py-2">
                 {/* Only show inline date when it's NOT the current sticky date */}
-                {dateText !== currentDate && (
+                {markerDate !== currentDate && (
                   <span className="bg-black/50 px-3.5 py-1 rounded-2xl text-[13px] font-medium text-white/90 shadow-lg">
                     {dateText}
                   </span>
@@ -524,7 +995,8 @@ export default function ChatViewer() {
           }
 
           // Show avatar only for first message in a group from same sender
-          const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
+          const prevMessage =
+            index > 0 ? chatData.messages[index - 1] : null;
           const showAvatar =
             !isOutgoing &&
             (!prevMessage ||
@@ -534,11 +1006,7 @@ export default function ChatViewer() {
           return (
             <div
               key={message.id || index}
-              ref={(el) => {
-                if (el && message.id) {
-                  messageRefsMap.current.set(message.id, el);
-                }
-              }}
+              ref={bindRowRef(index, message.id)}
               className={
                 highlightedMessageId === message.id
                   ? "animate-pulse bg-tg-accent/20 rounded-lg"
@@ -553,20 +1021,13 @@ export default function ChatViewer() {
           );
         })}
 
-        {/* Load more indicator at bottom */}
-        {displayedCount < chatData.messages.length && (
-          <div className="flex justify-center py-4">
-            {loadingMore ? (
-              <div className="w-6 h-6 border-2 border-tg-border border-t-tg-accent rounded-full animate-spin"></div>
-            ) : (
-              <span className="text-tg-text-secondary text-[13px]">
-                Scroll down for more messages
-              </span>
-            )}
-          </div>
+        {bottomSpacerHeight > 0 && (
+          <div
+            aria-hidden="true"
+            style={{ height: `${bottomSpacerHeight}px` }}
+            className="shrink-0"
+          />
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       <MessageInput />
